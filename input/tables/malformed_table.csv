@@ -1,0 +1,4 @@
+program,semester,tuition_fee
+BCA,1,45000
+MCA,2,60000,extra_stray_field,another
+"unclosed quote,3,70000

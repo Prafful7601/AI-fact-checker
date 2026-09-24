@@ -1,0 +1,11 @@
+roll_no,name,category,family_income,cgpa,attendance_percent,eligible
+MCA23001,Aatir Khan,General,450000,8.0,92,No
+MCA23002,Prafful Gupta,General,300000,8.9,96,Yes
+MCA23003,Prashant Singh,OBC,220000,7.8,88,Yes
+MCA23004,Sana Sheikh,General,600000,8.6,90,No
+MCA23005,Rohit Verma,SC,180000,7.1,80,Yes
+MCA23006,Neha Sharma,General,250000,9.2,98,Yes
+MCA23007,Imran Ali,OBC,320000,7.3,85,No
+MCA23008,Divya Rao,ST,150000,7.9,91,Yes
+MCA23009,Karan Mehta,General,700000,6.5,70,No
+MCA23010,Fatima Ansari,SC,200000,8.4,94,Yes

@@ -1,0 +1,17 @@
+\begin{table}[t]
+\centering
+\caption{NumNear-TabFact construction statistics and per-type cosine similarity (all-MiniLM-L6-v2) between original and near-miss claims.}
+\label{tab:numnear-stats}
+\begin{tabular}{lrrr}
+\toprule
+Perturbation type & \#Variants & \#Test & Mean sim.\\
+\midrule
+off by one & 13,528 & 1,380 & 0.976 \\
+digit swap & 9,697 & 990 & 0.941 \\
+magnitude change & 15,123 & 1,552 & 0.961 \\
+round number change & 15,124 & 1,552 & 0.961 \\
+\midrule
+\textbf{Total} & 53,472 & 5,474 & 0.961 \\
+\bottomrule
+\end{tabular}
+\end{table}

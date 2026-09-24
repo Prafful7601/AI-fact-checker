@@ -1,0 +1,81 @@
+seed: 42
+
+paths:
+  tabfact_repo: data/Table-Fact-Checking
+  tabfact_tables: data/Table-Fact-Checking/data/all_csv
+  tabfact_r1: data/Table-Fact-Checking/collected_data/r1_training_all.json
+  tabfact_r2: data/Table-Fact-Checking/collected_data/r2_training_all.json
+  tabfact_train_ids: data/Table-Fact-Checking/data/train_id.json
+  tabfact_val_ids: data/Table-Fact-Checking/data/val_id.json
+  tabfact_test_ids: data/Table-Fact-Checking/data/test_id.json
+  processed_dir: data/processed
+  cache_dir: cache
+  results_dir: results
+
+models:
+  # Add more entries here to evaluate additional models -- no code changes needed,
+  # as long as the provider is one of `providers:` below.
+  default: qwen2.5:7b-instruct
+  available:
+    - name: qwen2.5:7b-instruct
+      provider: ollama
+      max_tokens: 1024
+      temperature_checks: 0.7   # sampling temperature for K check generations
+      temperature_greedy: 0.0
+      # Local inference: no per-token cost.
+      input_per_mtok: 0.0
+      output_per_mtok: 0.0
+    - name: gemini-3.5-flash-lite
+      provider: gemini
+      max_tokens: 1024
+      temperature_checks: 0.7
+      temperature_greedy: 0.0
+      # Gemini paid-tier pricing per ai.google.dev/gemini-api/docs/pricing (checked 2026-09-23,
+      # "pricing through Dec 31 2026"). Free tier is $0 but capped at 500 requests/day
+      # (confirmed via a live 429 RESOURCE_EXHAUSTED response, quotaId
+      # GenerateRequestsPerDayPerProjectPerModel-FreeTier) -- too low for this project's scale.
+      input_per_mtok: 0.30
+      output_per_mtok: 2.50
+    - name: claude-haiku-4-5-20251001
+      provider: anthropic
+      max_tokens: 1024
+      temperature_checks: 0.7
+      temperature_greedy: 0.0
+      # Pricing per Anthropic's published rates for the Haiku 4.5 family (checked 2026-09-23).
+      input_per_mtok: 1.00
+      output_per_mtok: 5.00
+
+providers:
+  anthropic:
+    api_key_env: ANTHROPIC_API_KEY
+  gemini:
+    api_key_env: GEMINI_API_KEY
+  ollama:
+    host: http://localhost:11434
+
+llm:
+  max_concurrency: 8
+  max_retries: 8
+  base_backoff_seconds: 1.0
+  max_backoff_seconds: 60.0
+  request_timeout_seconds: 60
+  # Per-provider proactive rate pacing (seconds between call starts), to avoid
+  # hammering a free-tier quota and burning the retry budget on 429s.
+  # Gemini free tier for gemini-3.5-flash-lite is 15 requests/minute -> 4.5s
+  # spacing with a small safety margin.
+  min_interval_seconds:
+    gemini: 4.5
+    anthropic: 0.0
+
+experiment:
+  k_checks: 5
+  k_ablation: [1, 3, 5]
+  numeric_tolerance: 1.0e-6
+  embedding_model: all-MiniLM-L6-v2
+  alphas: [0.02, 0.05, 0.10]
+  n_conformal_resplits: 100
+  calibration_fraction: 0.5   # of the eval set, stratified by label and claim type
+  pilot_n_claims: 50
+
+perturbation:
+  types: [off_by_one, digit_swap, magnitude_change, round_number_change]
