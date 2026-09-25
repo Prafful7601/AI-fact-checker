@@ -1,0 +1,13 @@
+method,category,count
+b1,reasoning_error,28
+b1,format_error,2
+b2,format_error,16
+b2,reasoning_error,14
+b3,genuine_reasoning_error,18
+b3,number_parsing_error,5
+b3,wrong_column,5
+b3,wrong_filter,2
+ours,genuine_reasoning_error,21
+ours,wrong_filter,3
+ours,wrong_column,3
+ours,number_parsing_error,3

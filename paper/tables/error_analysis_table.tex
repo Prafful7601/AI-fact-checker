@@ -1,0 +1,17 @@
+\begin{table}[t]
+\centering
+\caption{Failure category, 30 sampled failures per method (Gemini test set). Blank = category not applicable to that method's output format.}
+\label{tab:error-categories}
+\footnotesize
+\begin{tabular}{lcccc}
+\toprule
+Category & B1 & B2 & B3 & Ours \\
+\midrule
+(genuine\_)reasoning\_error & 28 & 14 & 18 & 21 \\
+format\_error & 2 & 16 & -- & -- \\
+wrong\_column & -- & -- & 5 & 3 \\
+wrong\_filter & -- & -- & 2 & 3 \\
+number\_parsing\_error & -- & -- & 5 & 3 \\
+\bottomrule
+\end{tabular}
+\end{table}

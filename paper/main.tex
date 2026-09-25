@@ -41,13 +41,20 @@ $K$ times, and confidence is the agreement among the $K$ executed verdicts;
 and (3) applies split-conformal risk control to that confidence so that,
 among the claims the system answers, the error rate is guaranteed, with high
 probability, not to exceed a chosen $\alpha$ -- every claim below threshold
-is instead routed to a human reviewer through an automated RPA workflow. We
-evaluate on the full numeric subset of TabFact's test split (11{,}400
-claims) and on NumNear-TabFact (5{,}474 test-derived near-miss claims);
-\todo{full-run accuracy/coverage/risk numbers pending -- large-scale
-evaluation in progress, see Section~\ref{sec:results}}. Our
-contribution targets SDG 16 (public access to reliable information) and, as
-an institutional deployment, SDG 4 (educational information).
+is instead routed to a human reviewer through an automated RPA workflow. On
+8{,}205 TabFact and NumNear-TabFact test claims evaluated with a hosted LLM
+(Gemini 3.5 Flash-Lite), we find that within-method execution-agreement
+alone, while positively correlated with correctness, is too coarse-grained
+(only $K{+}1$ distinguishable levels) to certify any of the strict error
+rates $\alpha\in\{0.02,0.05,0.10\}$ with non-trivial coverage; however, a
+cross-method signal -- agreement between the executed-check verdict and an
+independently-elicited free-text verdict -- does certify $\alpha=0.10$ at
+$43.9\%$ coverage. A secondary run on a small local open-weight model
+(Qwen2.5-7B, 3{,}752 claims to date) shows the same qualitative pattern at
+lower absolute accuracy, indicating the approach's reliability scales with
+base-model capability. Our contribution targets SDG 16 (public access to
+reliable information) and, as an institutional deployment, SDG 4
+(educational information).
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -280,7 +287,15 @@ computed result. Tables are serialized to the LLM as markdown with column
 headers. Numbers are parsed robustly (commas, units, \%, simple dates
 stripped) with a numeric tolerance of $10^{-6}$. A check that fails to parse,
 references a nonexistent column, or raises during execution is marked
-\textsc{invalid} and is never allowed to silently fail into a verdict.
+\textsc{invalid} and is never allowed to silently fail into a verdict. The
+check-generation prompt includes explicit formatting constraints (the exact
+operator vocabulary; column names must be copied verbatim from the header)
+and two worked examples on an unrelated illustrative table, added after an
+early error analysis showed operator-syntax mistakes (e.g.\ \texttt{==} or
+\texttt{<>} for \texttt{=}) as a recurring failure mode; the executor also
+normalizes a small set of common syntactic variants (Section~\ref{sec:error-analysis}
+discusses what failure modes remain after this fix). This prompt is used
+identically for both models evaluated in Section~\ref{sec:results}.
 
 \subsection{Execution-agreement confidence (C2)}
 For a claim $c$ and table $T$, we sample $K$ checks from the LLM at
@@ -295,9 +310,34 @@ exactly as it should be: we have less independent evidence for it. If
 $n_T=n_F=0$ (all $K$ checks invalid), the claim is \textsc{unverifiable} and
 always abstains regardless of $\lambda$.
 
+\subsection{Cross-method confidence}
+\label{sec:cross-method}
+$s(c,T)$ above is a \emph{within-method} signal: all $K$ samples come from
+the same check-generation prompt, so they can only take $K+1$ distinct
+values ($0, 1/K, \ldots, 1$). As Section~\ref{sec:results} shows, this
+coarseness caps how selectively the system can filter claims, regardless of
+how the conformal threshold is chosen. We therefore also evaluate a
+\emph{cross-method} signal that combines the execution-based verdict with an
+independently-elicited free-text verdict (B2, Section~\ref{sec:baselines}):
+\begin{equation}
+s_{\times}(c,T) = \begin{cases}
+\dfrac{s(c,T) + s_{B2}(c,T)}{2} & \text{if the two verdicts agree} \\[4pt]
+0 & \text{otherwise,}
+\end{cases}
+\end{equation}
+where $s_{B2}$ is B2's self-reported confidence rescaled to $[0,1]$. Two
+verdicts reached by different means -- one via code execution, one via
+free-text reasoning -- agreeing is a qualitatively different, and as we find
+empirically stronger, piece of evidence than either method's internal
+self-consistency alone.
+
 \subsection{Conformal calibration (C3)}
-Given a calibration split with $(s_i, \text{correct}_i)_{i=1}^n$ (agreement
-score and whether the majority verdict matched the gold label), we select
+We apply the same calibration procedure independently to each of the three
+confidence signals above ($s$, $s_{B2}$, and $s_\times$), so that
+Section~\ref{sec:results} can report where each one does and does not
+certify a usable operating point. Given a calibration split with
+$(s_i, \text{correct}_i)_{i=1}^n$ (a confidence score and whether the
+corresponding verdict matched the gold label), we select
 $\lambda_\alpha$ as the smallest threshold such that the finite-sample
 upper confidence bound on selective risk, using the ``add-one'' correction
 $\widehat R_{\text{ucb}}(\lambda) = (\text{wrong}(\lambda)+1)/
@@ -311,6 +351,7 @@ verify $\Pr[R(\lambda_\alpha)\le\alpha]$ holds at the target rate
 (Section~\ref{sec:results}).
 
 \subsection{Baselines}
+\label{sec:baselines}
 \textbf{B1 (LLM-only):} the LLM is shown the table and claim and answers
 \textsc{true}/\textsc{false} directly, in free text, with no execution.
 \textbf{B2 (LLM-only + self-reported confidence):} as B1, but the LLM also
@@ -389,87 +430,192 @@ or a count/comparison/superlative/aggregation cue phrase) are used for
 evaluation, with no sampling -- $11{,}400$ claims, exact count. Claims
 are tagged into \{lookup, count, comparison, superlative, aggregation,
 other\} by documented keyword heuristics
-(Section~\ref{sec:limitations} discusses their imperfection). The evaluation
-set (original test claims and their test-derived NumNear-TabFact
-near-misses) is split into calibration/test halves stratified by (label,
-claim type), seed 42.
+(Section~\ref{sec:limitations} discusses their imperfection). The full
+evaluation set (original test claims plus their test-derived NumNear-TabFact
+near-misses, $16{,}874$ claims total) is deterministically shuffled (seed
+42) and split in half by claim: the first half is evaluated with the local
+model, the second with the hosted model (below), so that both runs draw from
+the same underlying distribution rather than from hand-picked subsets. Each
+half retains TabFact's own calibration/test assignment, stratified by
+(label, claim type).
 
-\textbf{Models.} Qwen2.5-7B-Instruct, run locally via Ollama (chosen after a
-free-tier hosted API proved too rate-limited for this project's scale --
-Section~\ref{sec:limitations}); $K=5$ sampled checks at temperature $0.7$ for
-our method, greedy ($K=1$) for B3. The check-language/executor/conformal code
-is model-agnostic (Section~\ref{sec:method}), so larger or hosted models can
-be substituted with no code changes once available.
+\textbf{Models.} Two models, evaluated on disjoint claim halves as described
+above, via the same provider-agnostic client (Section~\ref{sec:method}
+notes this requires no code changes to add a model): \textbf{Gemini 3.5
+Flash-Lite} (hosted, paid tier; $8{,}205$ of $8{,}437$ assigned claims
+completed before the evaluation budget was exhausted -- $97.3\%$) as the
+primary result, and \textbf{Qwen2.5-7B-Instruct} (run locally via Ollama,
+chosen initially because free-tier hosted access proved too rate-limited for
+this project's scale -- Section~\ref{sec:limitations}; $3{,}752$ of $8{,}437$
+claims completed at submission time, reported as an ongoing secondary
+comparison) as a lower-capability reference point. $K=5$ sampled checks at
+temperature $0.7$ for our method, greedy ($K=1$) for B3, for both models.
 
 \textbf{Metrics.} Accuracy and macro-F1 on original vs.\ near-miss claims;
-risk--coverage curves; realised conformal risk and coverage, mean $\pm$ std
-over 100 calibration/test re-splits, for $\alpha\in\{0.02,0.05,0.10\}$;
-per-claim-type breakdown; McNemar's test between methods; 95\% bootstrap
-confidence intervals on headline metrics; token cost and latency per claim.
+risk--coverage curves for all three confidence signals
+(Section~\ref{sec:cross-method}); realised conformal risk and coverage for
+$\alpha\in\{0.02,0.05,0.10,0.15,0.20,0.30\}$ -- widened beyond the three
+target rates in our original design once calibration on $\{0.02,0.05,0.10\}$
+alone revealed a hard floor (Section~\ref{sec:results}), to characterise
+where each signal actually becomes usable; per-claim-type breakdown;
+McNemar's test between methods; 95\% bootstrap confidence intervals on
+headline metrics; token cost and latency per claim.
 
 \section{Results}
 \label{sec:results}
 
-\todo{Full-scale results (11{,}400 original + 5{,}474 near-miss test claims)
-are pending -- the full run is compute-bound (single local model, no hosted
-rate limit but no parallelism either) and is running in the background.
-The tables below will be populated from results/tables/*.csv once it
-completes; structure is fixed. In the meantime, Table~\ref{tab:pilot}
-reports pilot-scale ($n=50$: 35 original + 15 near-miss, seed 42) accuracy,
-included as a validated end-to-end sanity check of the full pipeline, not as
-a substitute for the full-scale result.}
-
-\begin{table}[t]
-\centering
-\caption{Pilot-scale accuracy ($n=50$), Qwen2.5-7B-Instruct (local).
-Preliminary sanity check only -- not the full-scale result.}
-\label{tab:pilot}
-\begin{tabular}{lc}
-\toprule
-Method & Accuracy \\
-\midrule
-B1 (LLM-only) & 0.740 \\
-B2 (+ confidence) & 0.780 \\
-B3 ($K$=1 check) & 0.400 \\
-Ours ($K$=5) & 0.520 \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-At pilot scale, the check-execution methods (B3, Ours) score \emph{below}
-the free-text baselines (B1, B2) on this 7B model -- the opposite of what a
-larger/hosted model would be expected to show. Manual inspection of the
-executed checks shows this is a check-\emph{generation} reliability issue,
-not a flaw in the execution-agreement idea itself: a 7B model produces
-malformed or semantically wrong JSON checks (wrong column, wrong filter)
-more often than it produces a wrong direct verdict. This is itself a useful,
-honest finding for Section~\ref{sec:limitations}: the accuracy benefit of
-execution-agreement over free-text verdicts is conditional on the base
-model's instruction-following reliability, whereas the calibrated-abstention
-guarantee (C3) is designed to hold regardless -- a low agreement score from
-an unreliable check generator should still correctly route the claim to
-human review rather than let a confidently-wrong free-text answer through
-uncorrected. We flag this hypothesis for confirmation once the full run,
-and a stronger/hosted model, are available.
-
 \input{tables/main_results.tex}
+
+\textbf{Accuracy.} On original claims, the check-execution methods are
+competitive with the free-text baselines -- Ours reaches $70.1\%$ vs.\
+B1's $76.1\%$ and B2's $74.0\%$ (Table~\ref{tab:main-results}; 95\%
+bootstrap CIs in the accompanying CSV are all within $\pm 1.8$ points).
+McNemar's test confirms B1 and B2 each significantly outperform Ours on
+original claims ($\chi^2=28.5$, $p=9.5\times10^{-8}$ vs.\ B1;
+$\chi^2=13.0$, $p=3.1\times10^{-4}$ vs.\ B2), while Ours significantly
+outperforms the single-check baseline B3 ($\chi^2=22.3$,
+$p=2.3\times10^{-6}$), confirming that sampling $K=5$ checks and taking a
+majority vote is a real improvement over a single greedy check, even though
+neither closes the gap to free-text verdicts on this model. On near-miss
+claims, B3 and Ours drop sharply (to $43.5\%$ and $46.8\%$) while B1 and B2
+\emph{rise} (to $78.1\%$ and $82.4\%$) -- Section~\ref{sec:error-analysis}
+shows this is not near-miss detection so much as a shift toward predicting
+\textsc{false} that happens to align with near-miss claims being false by
+construction, and that this shift itself tracks perturbation difficulty in
+an interpretable way.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{figures/cross_model_comparison.pdf}
+\caption{Accuracy by method, hosted (Gemini 3.5 Flash-Lite, $n=8{,}205$)
+vs.\ local (Qwen2.5-7B-Instruct, $n=3{,}752$, ongoing) model. The gap widens
+sharply for the check-execution methods (B3, Ours), confirming that their
+reliability is conditional on the base model's instruction-following
+capability, not merely a property of the method.}
+\label{fig:cross-model}
+\end{figure}
+
+\label{sec:cross-model}
+\textbf{Cross-model comparison.} Figure~\ref{fig:cross-model} and
+Table~\ref{tab:cross-model} compare the hosted and local models directly.
+B1/B2 degrade gracefully moving to the smaller model ($76.1\%\to74.3\%$,
+$76.4\%\to73.2\%$), but B3 and Ours degrade sharply
+($58.5\%\to31.4\%$, $62.0\%\to42.6\%$), with the local model's
+\textsc{unverifiable} rate rising to $50.3\%$ for B3 and $32.0\%$ for Ours
+(vs.\ $11.8\%$/$5.7\%$ hosted). This is the clearest evidence in our results
+that execution-agreement's value is conditional on the base model's
+reliability at the check-generation sub-task specifically, not on general
+language understanding (which B1/B2 also require and which degrades far
+less).
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{figures/perturbation_difficulty.pdf}
+\caption{B1's accuracy on near-miss claims (equivalently, its rate of
+predicting \textsc{false}, since every near-miss claim is false by
+construction), by perturbation type. Accuracy tracks perturbation subtlety:
+off-by-one, the smallest possible edit, is hardest to catch; digit-swap,
+which can produce a very different-looking number, is easiest.}
+\label{fig:perturbation}
+\end{figure}
+
+\textbf{Risk--coverage.} This is the central result. We calibrate all three
+confidence signals from Section~\ref{sec:cross-method} independently and
+report realised risk and coverage on the disjoint test half
+(Table~\ref{tab:risk-coverage}, Figure~\ref{fig:risk-coverage}).
+\emph{Within-method} execution-agreement
+($s$) certifies \emph{none} of $\alpha\in\{0.02,\ldots,0.30\}$ with non-zero
+coverage: its realised risk floors at $29.5\%$ even when restricted to the
+single most confident bucket (full 5/5 agreement, $67\%$ of test claims),
+because $K=5$ only yields six distinguishable confidence levels, and the
+finite-sample correction (Section~\ref{sec:method}) correctly refuses to
+certify a rate the data cannot support -- it abstains on everything rather
+than overstate the guarantee. B2's self-reported confidence does better but
+is saturated ($88\%$ of claims report confidence $=100$) and only certifies
+$\alpha\ge0.15$, at $88.2\%$ coverage. The \emph{cross-method} signal
+$s_\times$ is the only one of the three that certifies a strict target:
+$\alpha=0.10$ at $43.9\%$ coverage, and $\alpha\ge0.15$ at $56.3\%$
+coverage (full risk/coverage grid in Table~\ref{tab:risk-coverage}; the
+accuracy-by-confidence-bucket breakdown underlying this discussion is in
+\texttt{results/tables/gemini\_accuracy\_by\_confidence.csv}). We read this
+as a genuine, if modest, positive result for C2/C3 together -- but one that
+depends on combining two independently-elicited verdicts, not on
+within-method sampling alone as originally specified;
+Section~\ref{sec:limitations} discusses why.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{figures/risk_coverage_curve.pdf}
+\caption{Realised risk vs.\ target risk $\alpha$, three confidence signals.
+The diagonal is where realised risk equals the target (the best a valid
+calibration can do while still answering something). Within-method
+agreement (Ours) stays at zero coverage -- hence zero realised risk, trivially --
+across the entire tested range, meaning it never actually answers a claim
+within these targets.}
+\label{fig:risk-coverage}
+\end{figure}
+
 \input{tables/risk_coverage.tex}
+
+\textbf{Per-claim-type.} Table~\ref{tab:per-claim-type} breaks Ours down by
+claim type. Lookup claims are easiest ($78.0\%$ original), aggregation is
+the most robust to the near-miss perturbation (a comparatively small
+$65.2\%\to60.8\%$ drop, vs.\ e.g.\ lookup's $78.0\%\to45.7\%$) -- plausibly
+because an aggregation check re-derives its target value from the whole
+column rather than matching a single perturbed cell, so a one-digit
+perturbation is less likely to coincide with the check's own computation.
+
 \input{tables/per_claim_type.tex}
 
 \section{Ablations}
 \label{sec:ablations}
 
-\todo{$K\in\{1,3,5\}$; with/without conformal calibration; greedy vs.\
-sampled checks -- populate from results/tables/ablations.csv.}
-
 \input{tables/ablations.tex}
+
+Table~\ref{tab:ablations} reconstructs $K\in\{1,3,5\}$ from the five checks
+already sampled per claim (no additional API calls: $K{=}1$ takes only the
+first sample, $K{=}3$ the first three). Raw accuracy improves monotonically
+but modestly with $K$ ($59.7\%\to61.9\%\to62.7\%$) -- consistent with
+Section~\ref{sec:results}'s finding that Ours significantly beats B3 by
+McNemar's test, but also with diminishing returns: most of the benefit of
+sampling is already realised by $K{=}3$. Coverage at $\alpha=0.10$ is zero
+for every $K$ tested, confirming that the ceiling identified in
+Section~\ref{sec:results} is not an artefact of $K{=}5$ specifically --
+increasing $K$ within this range refines the vote but does not add enough
+new confidence granularity to cross the target threshold; Section~\ref{sec:limitations}
+discusses why a substantially larger $K$ is unlikely to be a practical fix
+on its own. Greedy ($K{=}1$) vs.\ sampled ($K\ge3$) is exactly the B3-vs-Ours
+comparison already reported with a significant McNemar result
+(Section~\ref{sec:results}); with-vs-without conformal calibration is the
+coverage column of Table~\ref{tab:risk-coverage} vs.\ the unconditional
+accuracy in Table~\ref{tab:main-results} (i.e.\ coverage $=1$).
 
 \section{Error Analysis}
 \label{sec:error-analysis}
 
-\todo{30 failures per method, categorised: invalid JSON, wrong column, wrong
-filter, number-parsing error, genuine reasoning error -- populate from
-\texttt{results/tables/error\_analysis.csv} and cite illustrative examples.}
+\input{tables/error_analysis_table.tex}
+
+We sample 30 failures per method from the Gemini test set (923--842 total
+failures per method; Table~\ref{tab:error-categories}) and categorise each
+by inspecting its raw output (B1/B2) or executed check (B3/Ours). Two
+findings stand out. First, \textbf{the dominant failure mode on a capable
+model is semantic, not syntactic}: for both B3 and Ours, roughly
+two-thirds of sampled failures are a \emph{genuine\_reasoning\_error} -- the
+check parses and executes without any error, but encodes the wrong filter,
+column, or operation for the claim -- versus a small remainder of
+\emph{wrong\_column}, \emph{wrong\_filter}, and \emph{number\_parsing\_error}
+cases. This is the opposite pattern from the local 7B model
+(Section~\ref{sec:cross-model}), where malformed JSON dominated; it suggests
+that a stronger model shifts the bottleneck from ``can it write a valid
+check'' to ``can it write the \emph{right} check,'' which execution-agreement
+by itself does not directly diagnose. Second, \textbf{B2's confidence format
+increases its own failure rate}: over half of B2's sampled failures are a
+\emph{format\_error} (the two-line \texttt{VERDICT}/\texttt{CONFIDENCE}
+template not matching our parser) rather than a wrong verdict, versus only
+$2/30$ for B1's single-word format -- a concrete, fixable cost of asking for
+structured self-reported confidence that a production deployment should
+account for (e.g.\ with a more lenient parser or a structured-output API
+feature) rather than treating as a reasoning failure.
 
 \section{Deployment: RPA Escalation Workflow}
 \label{sec:deployment}
@@ -497,18 +643,34 @@ risk and coverage.
 \section{Limitations}
 \label{sec:limitations}
 
-\textbf{Single, small LLM.} We evaluate a single locally-run 7B-parameter
-model (Qwen2.5-7B-Instruct), chosen because hosted-API free tiers proved too
-rate-limited for this project's scale (Gemini's free tier for
-gemini-3.5-flash-lite caps at 500 requests/day, confirmed via a live
-\texttt{RESOURCE\_EXHAUSTED} response -- roughly $0.3\%$ of the calls a full
-run requires). As Section~\ref{sec:results} shows, this model's raw check-
-generation reliability is noticeably weaker than its direct free-text
-verdict accuracy, which likely understates the accuracy achievable with a
-larger or hosted model; cross-model generalisation of both accuracy and the
-conformal calibration itself remains untested and is the most important
-piece of near-term future work, enabled by the model-agnostic design in
-Section~\ref{sec:method}.
+\textbf{Within-method agreement's coarseness.} Our original design (C2)
+calibrates on agreement among $K=5$ same-method samples alone. As
+Section~\ref{sec:results} shows empirically, this signal has only $K+1=6$
+distinguishable levels, and even its best level (unanimous agreement) has a
+realised error rate ($29.5\%$) above every target we tested up to
+$\alpha=0.30$ -- the conformal procedure correctly refuses to certify any of
+these rates rather than overstate the guarantee, but the practical result is
+that within-method agreement alone cannot support strict risk control at any
+useful coverage on this task. The cross-method signal we introduce in
+Section~\ref{sec:cross-method} does certify $\alpha=0.10$, but this is a
+departure from the original single-method design, and we have not
+characterised how many independent methods, or how large a $K$, would be
+needed for within-method agreement alone to close this gap (if it can);
+increasing $K$ from 1 to 5 improved raw accuracy only modestly
+(Section~\ref{sec:ablations}), suggesting the fix may need a
+qualitatively different or continuous-valued confidence signal rather than
+simply a larger $K$.
+\textbf{Model capability and coverage.} Section~\ref{sec:cross-model}'s
+comparison is itself limited: the local model's run is $3{,}752/8{,}437$
+claims complete at submission time (an ongoing background process, not a
+crash or a chosen stopping point), and the Gemini run is $8{,}205/8{,}437$
+($97.3\%$) after its evaluation budget was exhausted -- both totals should
+be read as a strong indication of the qualitative pattern (Gemini
+substantially more reliable at check-generation specifically), not as
+final, complete-corpus numbers for either model. We evaluate exactly two
+models, both from the current generation and both accessed through a single
+provider-agnostic interface (Section~\ref{sec:method}) that makes adding a
+third model or a full run of either a configuration change, not new code.
 \textbf{English Wikipedia tables.} TabFact's tables are English-language
 Wikipedia infoboxes and lists; generalisation to other domains, languages,
 or noisier institutional spreadsheets (our RPA demo tables aside) is not
@@ -541,11 +703,24 @@ statistically bounded human-review workflow. NumNear-TabFact demonstrates,
 with a real measured similarity of $0.961$, that the numeric near-miss
 problem this system targets is not a corner case: a wrong numeric claim can
 be almost indistinguishable, to both a human skimmer and a semantic
-embedding, from a correct one. \todo{Summarize headline accuracy/risk/
-coverage numbers once the full run completes.} Future work includes
-extending to FEVEROUS and other table
-domains, learned (rather than heuristic) claim typing, and cross-model
-robustness of both accuracy and the conformal guarantee. This work targets
+embedding, from a correct one. On $8{,}205$ Gemini-evaluated test claims, we
+found that within-method execution-agreement, our original confidence
+signal, is positively correlated with correctness but too coarse-grained to
+certify strict error rates ($\alpha\in\{0.02,0.05,0.10\}$) at any useful
+coverage -- a negative result we report rather than obscure, because the
+conformal procedure behaving correctly (abstaining rather than overstating
+its guarantee) is itself evidence the calibration machinery works as
+designed. A cross-method signal combining execution-based and free-text
+verdicts recovers a genuine positive result, certifying $\alpha=0.10$ at
+$43.9\%$ coverage, and a secondary comparison against a small local model
+shows the same qualitative pattern at markedly lower absolute reliability,
+indicating the approach's practical value scales with base-model capability
+rather than being a fixed property of the method. Future work includes
+completing both model runs to their full corpus, extending to FEVEROUS and
+other table domains, learned (rather than heuristic) claim typing, and
+characterising what confidence signal -- larger $K$, more independent
+methods, or a differently-elicited continuous score -- closes the gap
+between within-method and cross-method calibration. This work targets
 SDG 16 by making numeric claims about institutional and public data
 auditable rather than merely plausible, and SDG 4 as an institutional
 deployment over educational records \cite{un2015sdgs}.

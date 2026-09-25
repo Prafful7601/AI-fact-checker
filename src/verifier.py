@@ -39,13 +39,41 @@ Claim: {claim}
 
 Translate this claim into a single JSON "check" object that can be mechanically executed against the table with pandas, so the verdict is computed by code rather than by you. Use exactly this schema:
 {{
-  "filters": [{{"column": <column name from the table>, "operator": "="|"!="|">"|"<"|">="|"<="|"contains", "value": <value>}}, ...],
+  "filters": [{{"column": <column name from the table>, "operator": <operator>, "value": <value>}}, ...],
   "target_column": <column name or null>,
   "operation": "lookup"|"count"|"sum"|"avg"|"max"|"min"|"argmax"|"argmin"|"compare"|"difference",
   "expected_value": <the value the claim asserts>,
-  "comparator": "="|"!="|">"|"<"|">="|"<="
+  "comparator": <operator>
 }}
-Column names must match the table's header exactly. Output ONLY the JSON object, no other text."""
+
+STRICT RULES (checks that break these are discarded, so follow them exactly):
+- <operator> must be EXACTLY one of these five characters or fewer, nothing else: = != > < >= <=
+  Never write "==", never write "<>", never add a space before or after it (write "=", not " =" or "==").
+- Every "column" and "target_column" value must be copied character-for-character from the table's header row above -- do not paraphrase, translate, or guess a column name.
+- Output ONLY the JSON object. No explanation, no markdown code fences, no text before or after it.
+
+Worked examples (the tables in these examples are illustrations of the format, not the table above):
+
+Example 1 -- lookup:
+Table:
+| name | department | salary |
+| --- | --- | --- |
+| ravi | sales | 40000 |
+| meera | it | 55000 |
+Claim: "meera works in the it department"
+{{"filters": [{{"column": "name", "operator": "=", "value": "meera"}}], "target_column": "department", "operation": "lookup", "expected_value": "it", "comparator": "="}}
+
+Example 2 -- aggregation/count:
+Table:
+| city | region |
+| --- | --- |
+| pune | west |
+| nashik | west |
+| indore | central |
+Claim: "there are 2 cities in the west region"
+{{"filters": [{{"column": "region", "operator": "=", "value": "west"}}], "target_column": null, "operation": "count", "expected_value": 2, "comparator": "="}}
+
+Now produce the JSON check for the real table and claim above."""
 
 
 def _extract_json(text: str) -> Optional[dict]:

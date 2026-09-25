@@ -55,16 +55,32 @@ providers:
 
 llm:
   max_concurrency: 8
+  # Per-provider override: a single local Ollama model processes requests
+  # essentially serially, so sending 8 at once queues later ones long enough
+  # to exceed request_timeout_seconds (a confusingly blank-looking
+  # asyncio.TimeoutError), even though nothing actually failed. Tried 1
+  # (fully serial): eliminated the errors but roughly quartered throughput,
+  # a worse tradeoff for a multi-day run than the ~1% error rate it fixed.
+  # 3 is a middle ground -- some overlap without deep queueing.
+  max_concurrency_per_provider:
+    ollama: 3
   max_retries: 8
   base_backoff_seconds: 1.0
   max_backoff_seconds: 60.0
   request_timeout_seconds: 60
+  # Per-provider override of the timeout above -- local generation can
+  # legitimately take longer than a hosted API round-trip.
+  request_timeout_seconds_per_provider:
+    ollama: 120
   # Per-provider proactive rate pacing (seconds between call starts), to avoid
-  # hammering a free-tier quota and burning the retry budget on 429s.
-  # Gemini free tier for gemini-3.5-flash-lite is 15 requests/minute -> 4.5s
-  # spacing with a small safety margin.
+  # hammering a quota and burning the retry budget on 429s.
+  # Billing confirmed active 2026-09-25 (a 20-way concurrent raw-API burst
+  # returned all HTTP 200, no RESOURCE_EXHAUSTED -- the free tier's 15/min cap
+  # would have made that impossible). Paced at 0.15s (~400/min) rather than
+  # fully unthrottled since the exact paid-tier ceiling isn't published;
+  # retry/backoff remains the safety net if this proves too aggressive.
   min_interval_seconds:
-    gemini: 4.5
+    gemini: 0.15
     anthropic: 0.0
 
 experiment:

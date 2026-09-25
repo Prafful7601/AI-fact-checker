@@ -127,7 +127,11 @@ class _OllamaBackend:
         messages.append({"role": "user", "content": prompt})
         resp = await asyncio.wait_for(
             self.client.chat(model=model, messages=messages,
-                              options={"temperature": temperature, "num_predict": max_tokens}),
+                              options={"temperature": temperature, "num_predict": max_tokens},
+                              # Ollama's default keep_alive (5 min idle) unloads a 4.7GB model
+                              # between calls during a long batch run, forcing a slow reload on
+                              # every request; keep it resident for the whole run instead.
+                              keep_alive="60m"),
             timeout=timeout,
         )
         text = resp.message.content or ""
@@ -161,7 +165,12 @@ class LLMClient:
         self.base_backoff = self.config["llm"]["base_backoff_seconds"]
         self.max_backoff = self.config["llm"]["max_backoff_seconds"]
         self.timeout = self.config["llm"]["request_timeout_seconds"]
-        self._sem = asyncio.Semaphore(self.max_concurrency)
+        concurrency_overrides = self.config["llm"].get("max_concurrency_per_provider", {})
+        self._sems = {
+            provider: asyncio.Semaphore(concurrency_overrides.get(provider, self.max_concurrency))
+            for provider in self._backends
+        }
+        self._timeout_overrides = self.config["llm"].get("request_timeout_seconds_per_provider", {})
         self._min_interval = self.config["llm"].get("min_interval_seconds", {})
         self._rate_locks = {provider: asyncio.Lock() for provider in self._backends}
         self._last_call_at = {provider: 0.0 for provider in self._backends}
@@ -215,15 +224,17 @@ class LLMClient:
 
         backend = self._backends.get(provider)
         if backend is None or not backend.available():
-            api_key_env = self.config["providers"][provider]["api_key_env"]
-            raise RuntimeError(f"provider '{provider}' unavailable: {api_key_env} not set (or SDK not installed)")
+            pconf = self.config["providers"][provider]
+            reason = f"{pconf['api_key_env']} not set" if "api_key_env" in pconf else "server unreachable"
+            raise RuntimeError(f"provider '{provider}' unavailable: {reason} (or SDK not installed)")
 
-        async with self._sem:
+        timeout = self._timeout_overrides.get(provider, self.timeout)
+        async with self._sems[provider]:
             attempt = 0
             while True:
                 try:
                     await self._pace(provider)
-                    out = await backend.call(model, prompt, system, temperature, max_tokens, self.timeout)
+                    out = await backend.call(model, prompt, system, temperature, max_tokens, timeout)
                     result = {
                         "text": out["text"], "cached": False,
                         "usage": {"input_tokens": out["input_tokens"], "output_tokens": out["output_tokens"]},
