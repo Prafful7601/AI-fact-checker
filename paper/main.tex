@@ -97,10 +97,12 @@ claims built by changing exactly one number in a true TabFact claim just
 enough to flip its label, and show that the average cosine similarity
 between a true claim and its near-miss, under a standard sentence embedding
 model, is $0.961$, with $91.2\%$ of pairs above $0.9$
-similarity. \todo{LLM-only accuracy on these near-misses vs.\ originals is
-being measured at full scale (Section~\ref{sec:results}); pilot-scale
-evidence is discussed there.} A system that cannot distinguish these pairs
-by meaning alone has no choice but to compute the disputed number directly.
+similarity. As Section~\ref{sec:results} shows, LLM-only verdicts (B1) do
+not degrade uniformly on these near-misses -- accuracy actually rises on
+this split, for reasons that turn out to matter for how these results should
+be read, not because the model is detecting the perturbation directly. A
+system that cannot distinguish these pairs by meaning alone has no choice
+but to compute the disputed number directly.
 
 Our approach is to stop asking the LLM to be the arithmetic engine and
 instead ask it to be a \emph{translator}: given a claim and a table, the LLM
