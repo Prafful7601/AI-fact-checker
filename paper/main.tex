@@ -153,61 +153,51 @@ a paper.
 \label{sec:related}
 
 \textbf{Table fact verification and program-aided reasoning.} TabFact
-\cite{chen2020tabfact} introduced the task of verifying natural-language
-statements against Wikipedia tables and proposed the Latent Program
-Algorithm, a semantic parser trained to produce and execute a program
-against the table. Later work replaced the trained parser with LLM-driven
-program synthesis: Binder \cite{cheng2023binder} binds an LLM inside a
-SQL/Python program; Dater \cite{ye2023dater} decomposes large tables and
-questions before applying self-consistency; Chain-of-Table
-\cite{wang2024chainoftable} evolves the table itself as an intermediate
-reasoning state with a greedy (non-sampling) operation search;
-PAL \cite{gao2023pal} and Program-of-Thoughts \cite{chen2023pot} offload
-arithmetic in word problems to a Python interpreter. All of these target
-general accuracy on table QA/verification or arithmetic word problems
-through better program construction; none targets the numeric-near-miss
-failure mode specifically, and none couples program execution to a
+\cite{chen2020tabfact} introduced verifying statements against Wikipedia
+tables and proposed the Latent Program Algorithm, a trained semantic parser
+that executes a program against the table. Later work replaced the trained
+parser with LLM-driven program synthesis: Binder \cite{cheng2023binder}
+binds an LLM inside a SQL/Python program; Dater \cite{ye2023dater} decomposes
+tables and questions before self-consistency; Chain-of-Table
+\cite{wang2024chainoftable} evolves the table as an intermediate reasoning
+state with greedy (non-sampling) search; PAL \cite{gao2023pal} and
+Program-of-Thoughts \cite{chen2023pot} offload word-problem arithmetic to a
+Python interpreter. All target general program-construction accuracy; none
+targets the numeric-near-miss failure mode or couples execution to a
 statistical abstention guarantee with a measured human-review cost. Our
-check language and $K$-sample agreement score are a zero-shot analogue of
-the program-execution idea, purpose-built to feed a conformal gate.
+check language and $K$-sample agreement are a zero-shot analogue of the
+program-execution idea, purpose-built to feed a conformal gate.
 
 \textbf{Numerical perturbation in fact-checking.} NumPert
 \cite{aarnes2025numpert} perturbs numbers in open-domain claim/evidence
-pairs and shows accuracy drops of up to 62\% under controlled numerical
-perturbation, but its evidence is free text, not tables, so there is no
-notion of a table-grounded, label-flip-verified construction. QuanTemp
-\cite{venktesh2024quantemp} is a large, real-world benchmark of naturally
-occurring numerical claims verified against retrieved web text; it is not a
-controlled minimal-pair benchmark and is not tabular. NumNear-TabFact is
-complementary: a controlled, table-grounded, programmatically label-verified
-near-miss benchmark that isolates the ``semantically near-identical,
-numerically wrong'' failure mode specifically for tables.
+pairs (accuracy drops up to 62\%), but over free text, with no
+table-grounded, label-flip-verified construction. QuanTemp
+\cite{venktesh2024quantemp} is a large benchmark of naturally occurring
+numerical claims against retrieved web text, not a controlled minimal-pair
+or tabular benchmark. NumNear-TabFact is complementary: a controlled,
+table-grounded, programmatically label-verified near-miss benchmark isolating
+the ``semantically near-identical, numerically wrong'' failure mode for
+tables specifically.
 
 \textbf{Conformal prediction and selective prediction for LLMs.} Conformal
 prediction \cite{angelopoulos2021gentle} gives distribution-free,
-finite-sample coverage guarantees from a held-out calibration set; conformal
-risk control \cite{angelopoulos2024risk} generalizes this to monotone risk
-functions via a finite-sample upper-confidence-bound correction, which we
-use to calibrate our agreement threshold. Mohri and Hashimoto
-\cite{mohri2024conformal} apply a conformal back-off procedure to bound the
-factuality of long-form LLM generations by retracting sub-claims; Abbasi
-Yadkori et al.\ \cite{abbasiyadkori2024conformal} use self-consistency and
-conformal calibration to bound hallucination rate on open-domain QA. Both
-target open-ended generation with LLM-judged similarity as the confidence
-signal; neither is applied to table-grounded numeric verification, and
-neither ties abstention to an executable, auditable check. Our confidence
-signal is execution agreement over independently generated, independently
-run programs, not LLM self-judgment, and our abstention is wired directly
-into an operational human-review workflow.
+finite-sample coverage guarantees from a calibration set; conformal risk
+control \cite{angelopoulos2024risk} generalizes this to monotone risk via a
+finite-sample correction, which we use to calibrate our agreement threshold.
+Mohri and Hashimoto \cite{mohri2024conformal} bound long-form generation
+factuality via a conformal back-off that retracts sub-claims; Abbasi Yadkori
+et al.\ \cite{abbasiyadkori2024conformal} use self-consistency and conformal
+calibration to bound hallucination rate on open-domain QA. Both target
+open-ended generation with LLM-judged similarity as the confidence signal;
+neither applies to table-grounded numeric verification or ties abstention to
+an executable, auditable check, as our execution-agreement signal does.
 
-\textbf{RPA in institutional administration.} Robotic process automation is
-increasingly used to automate rule-based administrative workflows in higher
-education \cite{bhardwaj2025rpa}, with reported gains in processing time and
-error reduction for tasks such as admissions and reporting. We extend this
-line of work by using RPA not merely to automate a fixed workflow, but to
-carry the overflow of a statistically calibrated abstention decision --
-the review queue's size is a direct, quantified consequence of the chosen
-$\alpha$, not a separately tuned business rule.
+\textbf{RPA in institutional administration.} RPA increasingly automates
+rule-based administrative workflows in higher education
+\cite{bhardwaj2025rpa}, with reported time and error gains for admissions and
+reporting. We extend this by using RPA to carry the overflow of a
+statistically calibrated abstention decision -- the review queue's size is a
+direct, quantified consequence of $\alpha$, not a separately tuned rule.
 
 \section{Problem Formulation}
 \label{sec:formulation}
@@ -249,7 +239,7 @@ human reviewer rather than answered incorrectly by the system.
 \begin{figure}[t]
 \centering
 \begin{tikzpicture}[
-  node distance=6mm and 6mm,
+  node distance=4mm and 4mm,
   box/.style={draw, rounded corners, align=center, minimum height=8mm, font=\footnotesize, fill=blue!5},
   decision/.style={draw, diamond, align=center, font=\footnotesize, fill=orange!10, inner sep=1pt},
   arr/.style={-{Latex[length=2mm]}}
@@ -289,15 +279,12 @@ computed result. Tables are serialized to the LLM as markdown with column
 headers. Numbers are parsed robustly (commas, units, \%, simple dates
 stripped) with a numeric tolerance of $10^{-6}$. A check that fails to parse,
 references a nonexistent column, or raises during execution is marked
-\textsc{invalid} and is never allowed to silently fail into a verdict. The
-check-generation prompt includes explicit formatting constraints (the exact
-operator vocabulary; column names must be copied verbatim from the header)
-and two worked examples on an unrelated illustrative table, added after an
-early error analysis showed operator-syntax mistakes (e.g.\ \texttt{==} or
-\texttt{<>} for \texttt{=}) as a recurring failure mode; the executor also
-normalizes a small set of common syntactic variants (Section~\ref{sec:error-analysis}
-discusses what failure modes remain after this fix). This prompt is used
-identically for both models evaluated in Section~\ref{sec:results}.
+\textsc{invalid}, never silently promoted to a verdict. The check-generation
+prompt gives the exact operator vocabulary and two worked examples (added
+after early testing showed operator-syntax mistakes, e.g.\ \texttt{==} for
+\texttt{=}, as a recurring failure); the executor also normalizes common
+syntactic variants. This prompt is identical for both models evaluated in
+Section~\ref{sec:results}.
 
 \subsection{Execution-agreement confidence (C2)}
 For a claim $c$ and table $T$, we sample $K$ checks from the LLM at
@@ -417,7 +404,7 @@ a semantic embedding, almost the same sentence.
 
 \begin{figure}[t]
 \centering
-\includegraphics[width=0.9\linewidth]{figures/similarity_histogram.pdf}
+\includegraphics[width=0.8\linewidth]{figures/similarity_histogram.pdf}
 \caption{Cosine similarity (all-MiniLM-L6-v2) between original TabFact
 claims and their NumNear-TabFact near-miss perturbations.}
 \label{fig:similarity}
@@ -486,20 +473,10 @@ shows this is not near-miss detection so much as a shift toward predicting
 construction, and that this shift itself tracks perturbation difficulty in
 an interpretable way.
 
-\begin{figure}[t]
-\centering
-\includegraphics[width=\linewidth]{figures/cross_model_comparison.pdf}
-\caption{Accuracy by method, hosted (Gemini 3.5 Flash-Lite, $n=8{,}205$)
-vs.\ local (Qwen2.5-7B-Instruct, $n=3{,}752$, ongoing) model. The gap widens
-sharply for the check-execution methods (B3, Ours), confirming that their
-reliability is conditional on the base model's instruction-following
-capability, not merely a property of the method.}
-\label{fig:cross-model}
-\end{figure}
-
 \label{sec:cross-model}
-\textbf{Cross-model comparison.} Figure~\ref{fig:cross-model} and
-Table~\ref{tab:cross-model} compare the hosted and local models directly.
+\textbf{Cross-model comparison.} We also compare the
+hosted and local models directly (full per-method numbers in
+\texttt{results/tables/cross\_model\_comparison.csv}).
 B1/B2 degrade gracefully moving to the smaller model ($76.1\%\to74.3\%$,
 $76.4\%\to73.2\%$), but B3 and Ours degrade sharply
 ($58.5\%\to31.4\%$, $62.0\%\to42.6\%$), with the local model's
@@ -510,46 +487,33 @@ reliability at the check-generation sub-task specifically, not on general
 language understanding (which B1/B2 also require and which degrades far
 less).
 
-\input{tables/cross_model.tex}
-
-\begin{figure}[t]
-\centering
-\includegraphics[width=\linewidth]{figures/perturbation_difficulty.pdf}
-\caption{B1's accuracy on near-miss claims (equivalently, its rate of
-predicting \textsc{false}, since every near-miss claim is false by
-construction), by perturbation type. Accuracy tracks perturbation subtlety:
-off-by-one, the smallest possible edit, is hardest to catch; digit-swap,
-which can produce a very different-looking number, is easiest.}
-\label{fig:perturbation}
-\end{figure}
-
 \textbf{Risk--coverage.} This is the central result. We calibrate all three
 confidence signals from Section~\ref{sec:cross-method} independently and
 report realised risk and coverage on the disjoint test half
-(Table~\ref{tab:risk-coverage}, Figures~\ref{fig:risk-coverage}
-and~\ref{fig:coverage-alpha}).
+(Table~\ref{tab:risk-coverage}, Figure~\ref{fig:risk-coverage}).
 \emph{Within-method} execution-agreement
 ($s$) certifies \emph{none} of $\alpha\in\{0.02,\ldots,0.30\}$ with non-zero
 coverage: its realised risk floors at $29.5\%$ even when restricted to the
-single most confident bucket (full 5/5 agreement, $67\%$ of test claims --
-Figure~\ref{fig:confidence-buckets}, left panel), because $K=5$ only yields
-six distinguishable confidence levels, and the
+single most confident bucket (full 5/5 agreement, $67\%$ of test claims),
+because $K=5$ only yields six distinguishable confidence levels, and the
 finite-sample correction (Section~\ref{sec:method}) correctly refuses to
 certify a rate the data cannot support -- it abstains on everything rather
 than overstate the guarantee. B2's self-reported confidence does better but
-is saturated ($88\%$ of claims report confidence $=100$,
-Figure~\ref{fig:confidence-buckets} middle panel) and only certifies
+is saturated ($88\%$ of claims report confidence $=100$) and only certifies
 $\alpha\ge0.15$, at $88.2\%$ coverage. The \emph{cross-method} signal
 $s_\times$ is the only one of the three that certifies a strict target:
 $\alpha=0.10$ at $43.9\%$ coverage, and $\alpha\ge0.15$ at $56.3\%$
-coverage. We read this as a genuine, if modest, positive result for C2/C3
-together -- but one that depends on combining two independently-elicited
-verdicts, not on within-method sampling alone as originally specified;
+coverage (full risk/coverage grid in Table~\ref{tab:risk-coverage}; the
+accuracy-by-confidence-bucket breakdown underlying this discussion is in
+\texttt{results/tables/gemini\_accuracy\_by\_confidence.csv}). We read this
+as a genuine, if modest, positive result for C2/C3 together -- but one that
+depends on combining two independently-elicited verdicts, not on
+within-method sampling alone as originally specified;
 Section~\ref{sec:limitations} discusses why.
 
 \begin{figure}[t]
 \centering
-\includegraphics[width=\linewidth]{figures/risk_coverage_curve.pdf}
+\includegraphics[width=0.85\linewidth]{figures/risk_coverage_curve.pdf}
 \caption{Realised risk vs.\ target risk $\alpha$, three confidence signals.
 The diagonal is where realised risk equals the target (the best a valid
 calibration can do while still answering something). Within-method
@@ -557,29 +521,6 @@ agreement (Ours) stays at zero coverage -- hence zero realised risk, trivially -
 across the entire tested range, meaning it never actually answers a claim
 within these targets.}
 \label{fig:risk-coverage}
-\end{figure}
-
-\begin{figure}[t]
-\centering
-\includegraphics[width=\linewidth]{figures/coverage_vs_alpha.pdf}
-\caption{Coverage (fraction of test claims answered rather than escalated)
-vs.\ target risk $\alpha$, same three signals as Figure~\ref{fig:risk-coverage}.
-Within-method agreement never rises above zero coverage in the tested range;
-B2 jumps directly to $88\%$ coverage once it crosses its one informative
-threshold (confidence $=100$); the cross-method signal is the only one with
-graded, continuously increasing coverage as $\alpha$ relaxes.}
-\label{fig:coverage-alpha}
-\end{figure}
-
-\begin{figure}[t]
-\centering
-\includegraphics[width=\linewidth]{figures/accuracy_by_confidence.pdf}
-\caption{Accuracy by confidence-score bucket (test half), for each of the
-three signals. Within-method agreement (left) and B2 self-confidence
-(middle) both show real but coarse and saturated structure; the cross-method
-signal (right) is more evenly spread and reaches higher accuracy in its top
-bucket.}
-\label{fig:confidence-buckets}
 \end{figure}
 
 \input{tables/risk_coverage.tex}
@@ -642,159 +583,91 @@ template not matching our parser) rather than a wrong verdict, versus only
 $2/30$ for B1's single-word format -- a concrete, fixable cost of asking for
 structured self-reported confidence that a production deployment should
 account for (e.g.\ with a more lenient parser or a structured-output API
-feature) rather than treating as a reasoning failure.
-
-\textbf{A worked example.} The claim ``hostile was launched before hotspur''
-(a \emph{comparison} claim over two ships' launch dates) was marked
-\textsc{false} by Ours despite a \textsc{true} gold label, categorised
-\emph{wrong\_filter}. Inspecting its five sampled checks is instructive: one
-sample filtered a single column to \emph{both} values at once
-(\texttt{ship=hostile AND ship=hotspur}), which cannot match any row and
-correctly executed to \textsc{invalid} -- the model attempted to express a
-two-entity comparison using the single-row \texttt{lookup} filter semantics
-instead of the schema's dedicated \texttt{compare}/\texttt{difference}
-operations, which compare across rows matched by the \emph{same} filter
-rather than two conflicting ones. A second sample looked up \texttt{hostile}
-alone and compared its launch date, \texttt{"24 january 1936"}, against an
-expected value with comparator \texttt{<}; our numeric parser extracts the
-leading integer from a date string as a convenience for columns that are
-``mostly numeric,'' so \texttt{"24 january 1936"} parses to the number
-$24$ -- the day of month, stripped of both the month and the year -- and the
-comparison is evaluated on that fragment. Both are real, fixable
-limitations: the check language has no first-class way to express ``compare
-column $X$ between two specific, named entities'' without a filter that
-self-conflicts, and the numeric parser's date handling (Section~\ref{sec:method})
-silently discards the part of a date most comparisons actually depend on.
-Neither is a reasoning failure in the sense of the model misunderstanding
-the claim -- the claim was paraphrased and decomposed correctly in both
-samples -- they are schema and parser expressiveness gaps that execution-
-agreement cannot see past, because every sample is wrong in a mutually
-consistent way rather than disagreeing.
+feature) rather than treating as a reasoning failure. Third, the near-miss
+behavioural shift noted in Section~\ref{sec:results} tracks perturbation
+subtlety closely: B1's accuracy on near-miss claims (equivalently, its rate
+of predicting \textsc{false}, since every near-miss claim is false by
+construction) is $70.5\%$ for off-by-one edits (the smallest possible
+change) vs.\ $76.6\%$ for round-number changes, $78.7\%$ for magnitude
+changes, and $89.7\%$ for digit-swaps (which can produce a very
+different-looking number) -- a graded, interpretable pattern, not flat bias
+toward one label.
 
 \section{Deployment: RPA Escalation Workflow}
 \label{sec:deployment}
 
-Every abstained claim is written, with its computed agreement score,
-executed checks, and abstention reason, to a review queue
-(\texttt{claim\_id, claim, table\_id, verdict, agreement\_score,
-executed\_checks, reason, status, created\_at}). A UiPath REFramework
-automation drives the end-to-end process: a Dispatcher validates each
-incoming claim (rejecting a missing table, an empty claim, or a duplicate
-claim ID as a business exception, without spending an LLM call on it) and
-enqueues valid claims to an Orchestrator queue; a Performer calls a FastAPI
-verification service (\texttt{POST /verify}) wrapped in a Retry Scope that
-retries only system exceptions (LLM/API unavailability, HTTP 503) and never
-retries business exceptions (malformed input, HTTP 400/422); answered claims
-are marked successful with their verdict, while abstained claims generate a
-review ticket and an email notification, with a scheduled job escalating any
-ticket left pending beyond a configured number of days. Because the review
-queue's population is exactly the set of claims below the calibrated
-threshold $\lambda_\alpha$, the reviewer workload is a direct, quantified
-consequence of the chosen $\alpha$ rather than a separately tuned business
-rule -- Section~\ref{sec:results} reports this workload alongside realised
-risk and coverage.
+Every abstained claim is written -- with its agreement score, executed
+checks, and abstention reason -- to a review queue. A UiPath REFramework
+automation drives the process: a Dispatcher validates each claim (rejecting
+a missing table, empty claim, or duplicate ID as a business exception before
+spending an LLM call) and enqueues the rest to an Orchestrator queue; a
+Performer calls a FastAPI service (\texttt{POST /verify}) wrapped in a Retry
+Scope that retries only system exceptions (LLM/API unavailability, HTTP 503),
+never business exceptions (malformed input, HTTP 400/422); abstained claims
+generate a review ticket and email notification, with overdue tickets
+escalated on a schedule. Queue population is exactly the set of claims below
+$\lambda_\alpha$, so reviewer workload is a direct, quantified consequence of
+$\alpha$, not a separately tuned rule.
 
 \section{Limitations}
 \label{sec:limitations}
 
-\textbf{Within-method agreement's coarseness.} Our original design (C2)
-calibrates on agreement among $K=5$ same-method samples alone. As
-Section~\ref{sec:results} shows empirically, this signal has only $K+1=6$
-distinguishable levels, and even its best level (unanimous agreement) has a
-realised error rate ($29.5\%$) above every target we tested up to
-$\alpha=0.30$ -- the conformal procedure correctly refuses to certify any of
-these rates rather than overstate the guarantee, but the practical result is
-that within-method agreement alone cannot support strict risk control at any
-useful coverage on this task. The cross-method signal we introduce in
-Section~\ref{sec:cross-method} does certify $\alpha=0.10$, but this is a
-departure from the original single-method design, and we have not
-characterised how many independent methods, or how large a $K$, would be
-needed for within-method agreement alone to close this gap (if it can);
-increasing $K$ from 1 to 5 improved raw accuracy only modestly
-(Section~\ref{sec:ablations}), suggesting the fix may need a
-qualitatively different or continuous-valued confidence signal rather than
-simply a larger $K$.
+\textbf{Within-method agreement's coarseness.} $K=5$ gives only $K{+}1=6$
+distinguishable agreement levels, and even unanimous agreement has a
+realised error rate ($29.5\%$) above every $\alpha$ tested up to $0.30$ --
+the procedure correctly refuses to certify these rates rather than overstate
+the guarantee, but within-method agreement alone cannot support useful risk
+control here. The cross-method signal (Section~\ref{sec:cross-method})
+does certify $\alpha=0.10$, but departs from the original single-signal
+design; raw accuracy improved only modestly from $K{=}1$ to $5$
+(Section~\ref{sec:ablations}), so closing this gap likely needs a
+qualitatively different or continuous-valued signal, not simply a larger
+$K$.
 \textbf{Model capability and coverage.} Section~\ref{sec:cross-model}'s
-comparison is itself limited: the local model's run is $3{,}752/8{,}437$
-claims complete at submission time (an ongoing background process, not a
-crash or a chosen stopping point), and the Gemini run is $8{,}205/8{,}437$
-($97.3\%$) after its evaluation budget was exhausted -- both totals should
-be read as a strong indication of the qualitative pattern (Gemini
-substantially more reliable at check-generation specifically), not as
-final, complete-corpus numbers for either model. We evaluate exactly two
-models, both from the current generation and both accessed through a single
-provider-agnostic interface (Section~\ref{sec:method}) that makes adding a
-third model or a full run of either a configuration change, not new code.
-\textbf{English Wikipedia tables.} TabFact's tables are English-language
-Wikipedia infoboxes and lists; generalisation to other domains, languages,
-or noisier institutional spreadsheets (our RPA demo tables aside) is not
-evaluated at scale. \textbf{FEVEROUS.} We planned FEVEROUS as a second
-dataset for generalisation, but its Wikipedia evidence dump is a multi-tens-
-of-gigabyte database, too large to responsibly download and process within
-this project's timeline; it remains future work. \textbf{Heuristic claim
-typing.} Both the numeric-claim filter and the lookup/count/comparison/
-superlative/aggregation typing are keyword heuristics, not a semantic
-parse, and will mis-tag claims that match a cue phrase incidentally or use
-unlisted phrasing. \textbf{NumNear-TabFact's groundability restriction.} As
-noted in Section~\ref{sec:nearmiss}, near-miss construction only covers
-claims with a literal or aggregate anchor in the table; claims whose truth
-depends on an unanchored derived quantity are excluded from the benchmark by
-construction. \textbf{Check language expressiveness and date parsing.}
-Section~\ref{sec:error-analysis}'s worked example surfaces two concrete gaps
-independent of model capability: the check schema has no direct way to
-express a comparison between two named entities without a self-conflicting
-filter, and the numeric parser extracts a date string's leading integer
-(e.g.\ the day of month) rather than comparing dates as dates. Both are
-implementation gaps in the check language, not fundamental limits of
-execution-agreement as an idea, and are natural targets for a revised
-schema. \textbf{The exchangeability assumption.} The conformal
-guarantee in Section~\ref{sec:formulation} holds under the assumption that
-calibration and test claims are exchangeable; a deployment where the claim
-distribution shifts after calibration (e.g.\ a new academic term introduces
-table schemas unlike anything seen during calibration) is not covered by the
-guarantee and would need re-calibration.
+comparison is partial: $3{,}752/8{,}437$ local-model claims (ongoing) and
+$8{,}205/8{,}437$ ($97.3\%$) hosted-model claims (budget exhausted), so both
+indicate the qualitative pattern rather than final complete-corpus numbers.
+We evaluate exactly two models through a provider-agnostic interface
+(Section~\ref{sec:method}) that makes a third model or either run's
+completion a configuration change, not new code.
+\textbf{English Wikipedia tables and FEVEROUS.} TabFact's tables are
+English-language Wikipedia infoboxes; generalisation to other domains,
+languages, or noisier institutional spreadsheets is untested at scale.
+FEVEROUS was planned as a second dataset, but its Wikipedia evidence dump is
+too large to responsibly process within this project's timeline and remains
+future work. \textbf{Heuristic claim typing.} The numeric-claim filter and
+lookup/count/comparison/superlative/aggregation typing are keyword
+heuristics, not a semantic parse, and will mis-tag unlisted phrasing.
+\textbf{NumNear-TabFact's groundability restriction.} Near-miss construction
+(Section~\ref{sec:nearmiss}) only covers claims with a literal or aggregate
+anchor; claims depending on an unanchored derived quantity are excluded by
+construction. \textbf{The exchangeability assumption.} The conformal
+guarantee (Section~\ref{sec:formulation}) assumes calibration and test
+claims are exchangeable; a post-calibration distribution shift (e.g.\ new
+table schemas each term) is not covered and would need re-calibration.
 
 \section{Conclusion and Future Work}
 \label{sec:conclusion}
 
-We presented Certified Numeric Verification, a system that replaces
-free-text LLM arithmetic with executable, sampled checks, calibrates the
-resulting execution-agreement confidence with split-conformal risk control,
-and routes every claim below the calibrated threshold to an auditable,
-statistically bounded human-review workflow. NumNear-TabFact demonstrates,
-with a real measured similarity of $0.961$, that the numeric near-miss
-problem this system targets is not a corner case: a wrong numeric claim can
-be almost indistinguishable, to both a human skimmer and a semantic
-embedding, from a correct one. On $8{,}205$ Gemini-evaluated test claims, we
-found that within-method execution-agreement, our original confidence
-signal, is positively correlated with correctness but too coarse-grained to
-certify strict error rates ($\alpha\in\{0.02,0.05,0.10\}$) at any useful
-coverage -- a negative result we report rather than obscure, because the
-conformal procedure behaving correctly (abstaining rather than overstating
-its guarantee) is itself evidence the calibration machinery works as
-designed. A cross-method signal combining execution-based and free-text
-verdicts recovers a genuine positive result, certifying $\alpha=0.10$ at
-$43.9\%$ coverage, and a secondary comparison against a small local model
-shows the same qualitative pattern at markedly lower absolute reliability,
-indicating the approach's practical value scales with base-model capability
-rather than being a fixed property of the method. Future work includes
-completing both model runs to their full corpus, extending to FEVEROUS and
-other table domains, learned (rather than heuristic) claim typing, and
-characterising what confidence signal -- larger $K$, more independent
-methods, or a differently-elicited continuous score -- closes the gap
-between within-method and cross-method calibration. This work targets
-SDG 16 by making numeric claims about institutional and public data
-auditable rather than merely plausible, and SDG 4 as an institutional
-deployment over educational records \cite{un2015sdgs}.
-
-\section*{Data and Code Availability}
-All code (data pipeline, verifier, conformal calibration, API, RPA
-integration, and the scripts that generate every table and figure in this
-paper directly from logged model outputs) is available at
-\url{https://github.com/Prafful7601/AI-fact-checker}. NumNear-TabFact and
-the full per-claim evaluation logs for both models are included; TabFact
-itself is redistributed under its original terms via the upstream
-repository linked in the project README, not duplicated here.
+We presented Certified Numeric Verification: executable, sampled checks in
+place of free-text LLM arithmetic, calibrated via split-conformal risk
+control, with every sub-threshold claim routed to an auditable human-review
+workflow. NumNear-TabFact's measured $0.961$ similarity shows the numeric
+near-miss problem is not a corner case. On $8{,}205$ Gemini-evaluated
+claims, within-method execution-agreement correlates with correctness but is
+too coarse-grained to certify strict error rates
+($\alpha\in\{0.02,0.05,0.10\}$) at useful coverage -- reported rather than
+obscured, since correctly abstaining is itself evidence the calibration
+machinery works. A cross-method signal (execution-based and free-text
+verdicts agreeing) recovers a genuine result, certifying $\alpha=0.10$ at
+$43.9\%$ coverage; a secondary local-model comparison shows the same pattern
+at lower reliability, so practical value scales with base-model capability
+rather than being fixed by the method. Future work: completing both runs to
+full corpus, FEVEROUS and other domains, learned claim typing, and a
+confidence signal -- larger $K$, more independent methods, or a continuous
+score -- that closes the within- vs.\ cross-method gap. This targets SDG 16
+(auditable numeric claims over institutional data) and SDG 4 (an
+institutional deployment over educational records) \cite{un2015sdgs}.
 
 \bibliographystyle{IEEEtran}
 \bibliography{refs}
