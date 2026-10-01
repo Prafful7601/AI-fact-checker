@@ -17,7 +17,7 @@
 
 \title{Certified Numeric Verification: Guaranteed-Error Fact-Checking of\\ Numeric Claims over Tables with Automated Human Escalation}
 
-\author{Mohd.~Aatir, Prafful Gupta, Prashant Kumar Singh, \todo{Member 4}\\
+\author{Prafful Gupta, Prashant Kumar Singh\\
 \textit{Department of Computer Applications (MCA), KIET Group of Institutions}}
 
 \maketitle
@@ -510,6 +510,8 @@ reliability at the check-generation sub-task specifically, not on general
 language understanding (which B1/B2 also require and which degrades far
 less).
 
+\input{tables/cross_model.tex}
+
 \begin{figure}[t]
 \centering
 \includegraphics[width=\linewidth]{figures/perturbation_difficulty.pdf}
@@ -524,25 +526,25 @@ which can produce a very different-looking number, is easiest.}
 \textbf{Risk--coverage.} This is the central result. We calibrate all three
 confidence signals from Section~\ref{sec:cross-method} independently and
 report realised risk and coverage on the disjoint test half
-(Table~\ref{tab:risk-coverage}, Figure~\ref{fig:risk-coverage}).
+(Table~\ref{tab:risk-coverage}, Figures~\ref{fig:risk-coverage}
+and~\ref{fig:coverage-alpha}).
 \emph{Within-method} execution-agreement
 ($s$) certifies \emph{none} of $\alpha\in\{0.02,\ldots,0.30\}$ with non-zero
 coverage: its realised risk floors at $29.5\%$ even when restricted to the
-single most confident bucket (full 5/5 agreement, $67\%$ of test claims),
-because $K=5$ only yields six distinguishable confidence levels, and the
+single most confident bucket (full 5/5 agreement, $67\%$ of test claims --
+Figure~\ref{fig:confidence-buckets}, left panel), because $K=5$ only yields
+six distinguishable confidence levels, and the
 finite-sample correction (Section~\ref{sec:method}) correctly refuses to
 certify a rate the data cannot support -- it abstains on everything rather
 than overstate the guarantee. B2's self-reported confidence does better but
-is saturated ($88\%$ of claims report confidence $=100$) and only certifies
+is saturated ($88\%$ of claims report confidence $=100$,
+Figure~\ref{fig:confidence-buckets} middle panel) and only certifies
 $\alpha\ge0.15$, at $88.2\%$ coverage. The \emph{cross-method} signal
 $s_\times$ is the only one of the three that certifies a strict target:
 $\alpha=0.10$ at $43.9\%$ coverage, and $\alpha\ge0.15$ at $56.3\%$
-coverage (full risk/coverage grid in Table~\ref{tab:risk-coverage}; the
-accuracy-by-confidence-bucket breakdown underlying this discussion is in
-\texttt{results/tables/gemini\_accuracy\_by\_confidence.csv}). We read this
-as a genuine, if modest, positive result for C2/C3 together -- but one that
-depends on combining two independently-elicited verdicts, not on
-within-method sampling alone as originally specified;
+coverage. We read this as a genuine, if modest, positive result for C2/C3
+together -- but one that depends on combining two independently-elicited
+verdicts, not on within-method sampling alone as originally specified;
 Section~\ref{sec:limitations} discusses why.
 
 \begin{figure}[t]
@@ -555,6 +557,29 @@ agreement (Ours) stays at zero coverage -- hence zero realised risk, trivially -
 across the entire tested range, meaning it never actually answers a claim
 within these targets.}
 \label{fig:risk-coverage}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{figures/coverage_vs_alpha.pdf}
+\caption{Coverage (fraction of test claims answered rather than escalated)
+vs.\ target risk $\alpha$, same three signals as Figure~\ref{fig:risk-coverage}.
+Within-method agreement never rises above zero coverage in the tested range;
+B2 jumps directly to $88\%$ coverage once it crosses its one informative
+threshold (confidence $=100$); the cross-method signal is the only one with
+graded, continuously increasing coverage as $\alpha$ relaxes.}
+\label{fig:coverage-alpha}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{figures/accuracy_by_confidence.pdf}
+\caption{Accuracy by confidence-score bucket (test half), for each of the
+three signals. Within-method agreement (left) and B2 self-confidence
+(middle) both show real but coarse and saturated structure; the cross-method
+signal (right) is more evenly spread and reaches higher accuracy in its top
+bucket.}
+\label{fig:confidence-buckets}
 \end{figure}
 
 \input{tables/risk_coverage.tex}
@@ -618,6 +643,33 @@ $2/30$ for B1's single-word format -- a concrete, fixable cost of asking for
 structured self-reported confidence that a production deployment should
 account for (e.g.\ with a more lenient parser or a structured-output API
 feature) rather than treating as a reasoning failure.
+
+\textbf{A worked example.} The claim ``hostile was launched before hotspur''
+(a \emph{comparison} claim over two ships' launch dates) was marked
+\textsc{false} by Ours despite a \textsc{true} gold label, categorised
+\emph{wrong\_filter}. Inspecting its five sampled checks is instructive: one
+sample filtered a single column to \emph{both} values at once
+(\texttt{ship=hostile AND ship=hotspur}), which cannot match any row and
+correctly executed to \textsc{invalid} -- the model attempted to express a
+two-entity comparison using the single-row \texttt{lookup} filter semantics
+instead of the schema's dedicated \texttt{compare}/\texttt{difference}
+operations, which compare across rows matched by the \emph{same} filter
+rather than two conflicting ones. A second sample looked up \texttt{hostile}
+alone and compared its launch date, \texttt{"24 january 1936"}, against an
+expected value with comparator \texttt{<}; our numeric parser extracts the
+leading integer from a date string as a convenience for columns that are
+``mostly numeric,'' so \texttt{"24 january 1936"} parses to the number
+$24$ -- the day of month, stripped of both the month and the year -- and the
+comparison is evaluated on that fragment. Both are real, fixable
+limitations: the check language has no first-class way to express ``compare
+column $X$ between two specific, named entities'' without a filter that
+self-conflicts, and the numeric parser's date handling (Section~\ref{sec:method})
+silently discards the part of a date most comparisons actually depend on.
+Neither is a reasoning failure in the sense of the model misunderstanding
+the claim -- the claim was paraphrased and decomposed correctly in both
+samples -- they are schema and parser expressiveness gaps that execution-
+agreement cannot see past, because every sample is wrong in a mutually
+consistent way rather than disagreeing.
 
 \section{Deployment: RPA Escalation Workflow}
 \label{sec:deployment}
@@ -687,7 +739,15 @@ unlisted phrasing. \textbf{NumNear-TabFact's groundability restriction.} As
 noted in Section~\ref{sec:nearmiss}, near-miss construction only covers
 claims with a literal or aggregate anchor in the table; claims whose truth
 depends on an unanchored derived quantity are excluded from the benchmark by
-construction. \textbf{The exchangeability assumption.} The conformal
+construction. \textbf{Check language expressiveness and date parsing.}
+Section~\ref{sec:error-analysis}'s worked example surfaces two concrete gaps
+independent of model capability: the check schema has no direct way to
+express a comparison between two named entities without a self-conflicting
+filter, and the numeric parser extracts a date string's leading integer
+(e.g.\ the day of month) rather than comparing dates as dates. Both are
+implementation gaps in the check language, not fundamental limits of
+execution-agreement as an idea, and are natural targets for a revised
+schema. \textbf{The exchangeability assumption.} The conformal
 guarantee in Section~\ref{sec:formulation} holds under the assumption that
 calibration and test claims are exchangeable; a deployment where the claim
 distribution shifts after calibration (e.g.\ a new academic term introduces
@@ -726,6 +786,15 @@ between within-method and cross-method calibration. This work targets
 SDG 16 by making numeric claims about institutional and public data
 auditable rather than merely plausible, and SDG 4 as an institutional
 deployment over educational records \cite{un2015sdgs}.
+
+\section*{Data and Code Availability}
+All code (data pipeline, verifier, conformal calibration, API, RPA
+integration, and the scripts that generate every table and figure in this
+paper directly from logged model outputs) is available at
+\url{https://github.com/Prafful7601/AI-fact-checker}. NumNear-TabFact and
+the full per-claim evaluation logs for both models are included; TabFact
+itself is redistributed under its original terms via the upstream
+repository linked in the project README, not duplicated here.
 
 \bibliographystyle{IEEEtran}
 \bibliography{refs}

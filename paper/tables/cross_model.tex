@@ -2,18 +2,22 @@
 \centering
 \caption{Cross-model comparison: hosted vs.\ local model (n as shown; Ollama run partial/ongoing).}
 \label{tab:cross-model}
+\footnotesize
 \begin{tabular}{llccc}
 \toprule
-Model & Method & $n$ & Acc. & Unverif.\ rate \\
+Model & Method & $n$ & Acc. & Unverif. \\
 \midrule
-Gemini 3.5 Flash-Lite (hosted) & B1 & 8,205 & 0.761 & 0.000 \\
-Gemini 3.5 Flash-Lite (hosted) & B2 & 8,205 & 0.764 & 0.000 \\
-Gemini 3.5 Flash-Lite (hosted) & B3 & 8,205 & 0.585 & 0.118 \\
-Gemini 3.5 Flash-Lite (hosted) & OURS & 8,205 & 0.620 & 0.057 \\
-Qwen2.5-7B-Instruct (local) & B1 & 3,752 & 0.743 & 0.000 \\
-Qwen2.5-7B-Instruct (local) & B2 & 3,752 & 0.732 & 0.000 \\
-Qwen2.5-7B-Instruct (local) & B3 & 3,752 & 0.314 & 0.503 \\
-Qwen2.5-7B-Instruct (local) & OURS & 3,752 & 0.426 & 0.320 \\
+\multirow{4}{*}{Gemini 3.5 FL (hosted)}
+ & B1 & 8,205 & 0.761 & 0.000 \\
+ & B2 & 8,205 & 0.764 & 0.000 \\
+ & B3 & 8,205 & 0.585 & 0.118 \\
+ & OURS & 8,205 & 0.620 & 0.057 \\
+\midrule
+\multirow{4}{*}{Qwen2.5-7B (local)}
+ & B1 & 3,752 & 0.743 & 0.000 \\
+ & B2 & 3,752 & 0.732 & 0.000 \\
+ & B3 & 3,752 & 0.314 & 0.503 \\
+ & OURS & 3,752 & 0.426 & 0.320 \\
 \bottomrule
 \end{tabular}
 \end{table}
